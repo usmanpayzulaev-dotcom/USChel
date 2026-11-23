@@ -1,27 +1,54 @@
+
 name: Build USCHEL APK
+
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
+
 permissions:
   contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up JDK 17
+
+      - name: Find and extract project
+        run: |
+          ZIP=$(find . -maxdepth 1 -iname 'USCHEL_CloudBuild*.zip' | head -n 1)
+          if [ -z "$ZIP" ]; then
+            echo "ZIP archive not found"
+            exit 1
+          fi
+          mkdir extracted
+          unzip -q "$ZIP" -d extracted
+          PROJECT_DIR=$(dirname "$(find extracted -name settings.gradle | head -n 1)")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
+      - name: Set up Android
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+
       - name: Build APK
-        run: gradle :app:assembleDebug
+        run: gradle -p "$PROJECT_DIR" :app:assembleDebug
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: USCHEL
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: extracted/**/app/build/outputs/apk/debug/app-debug.apk
